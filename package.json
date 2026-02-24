@@ -1,0 +1,25 @@
+{
+  "name": "handoff-agent",
+  "version": "1.0.0",
+  "description": "CLI that captures AI-agent session handoffs as ready-to-paste context markdown.",
+  "main": "index.js",
+  "bin": {
+    "handoff-agent": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "ai",
+    "agent",
+    "cli",
+    "handoff",
+    "context"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=16"
+  }
+}

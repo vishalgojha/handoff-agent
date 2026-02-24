@@ -1,0 +1,6 @@
+NOTES/
+.git/
+.github/
+*.log
+Thumbs.db
+.DS_Store
