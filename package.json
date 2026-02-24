@@ -13,7 +13,7 @@
   },
   "main": "index.js",
   "bin": {
-    "handoff-agent": "./index.js"
+    "handoff-agent": "index.js"
   },
   "scripts": {
     "test": "node tests/smoke-test.js"
