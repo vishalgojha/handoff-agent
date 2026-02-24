@@ -16,12 +16,17 @@ Capture a clean end-of-session handoff that is ready to paste into your next AI-
 
 The generated file is a context block designed to be pasted directly into the next agent session:
 
+- YAML frontmatter for machine parsing (`handoff_version`, `date`, `project_slug`, etc.)
 - Project and date metadata
 - What was instructed
 - What shipped
 - What remains open
 - Single next best instruction
 - A copy/paste continuation line for the next run
+
+## Validate locally
+
+`npm test`
 
 ## Local usage
 

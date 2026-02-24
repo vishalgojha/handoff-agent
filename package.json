@@ -2,9 +2,21 @@
   "name": "handoff-agent",
   "version": "1.0.0",
   "description": "CLI that captures AI-agent session handoffs as ready-to-paste context markdown.",
+  "author": "Vishal <vishal@chaoscraftlabs.com>",
+  "homepage": "https://github.com/vishalgojha/handoff-agent#readme",
+  "bugs": {
+    "url": "https://github.com/vishalgojha/handoff-agent/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vishalgojha/handoff-agent.git"
+  },
   "main": "index.js",
   "bin": {
     "handoff-agent": "./index.js"
+  },
+  "scripts": {
+    "test": "node tests/smoke-test.js"
   },
   "files": [
     "index.js",

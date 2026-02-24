@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
+const crypto = require("crypto");
 
 const questions = [
   "1. What project/agent is this for?",
@@ -27,11 +28,19 @@ function toTimeString(date) {
 }
 
 function toProjectSlug(input) {
-  const slug = input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
+  const normalized = input.normalize("NFKC").toLowerCase();
+  const slug = normalized
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-+|-+$/g, "");
-  return slug || "project";
+  if (slug) {
+    return slug;
+  }
+  const hash = crypto.createHash("sha1").update(normalized).digest("hex").slice(0, 8);
+  return `project-${hash}`;
+}
+
+function yamlQuote(value) {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
 function askQuestion(rl, promptText) {
@@ -51,28 +60,57 @@ function askQuestion(rl, promptText) {
   });
 }
 
-function readAnswersFromPipedInput(expectedCount) {
-  const raw = fs.readFileSync(0, "utf8");
-  const lines = raw.split(/\r?\n/).map((line) => line.trim());
-  const answers = [];
+function parseAnswersFromText(raw, expectedCount) {
+  const lines = raw.split(/\r?\n/);
 
-  for (const line of lines) {
-    if (!line) {
-      continue;
-    }
-    answers.push(line);
-    if (answers.length === expectedCount) {
-      break;
-    }
+  while (lines.length > 0 && lines[lines.length - 1] === "") {
+    lines.pop();
   }
 
-  if (answers.length < expectedCount) {
+  if (lines.length < expectedCount) {
     throw new Error(
-      `Expected ${expectedCount} non-empty answers from stdin, received ${answers.length}.`
+      `Expected ${expectedCount} answers from stdin, received ${lines.length}.`
     );
   }
 
+  const answers = lines.slice(0, expectedCount).map((line) => line.trim());
+  const blankIndex = answers.findIndex((answer) => !answer);
+  if (blankIndex !== -1) {
+    throw new Error(`Answer ${blankIndex + 1} cannot be blank.`);
+  }
+
   return answers;
+}
+
+function readAnswersFromPipedInput(expectedCount) {
+  const raw = fs.readFileSync(0, "utf8");
+  return parseAnswersFromText(raw, expectedCount);
+}
+
+function writeUniqueOutputFile(notesDir, baseStem, output, timestamp) {
+  let suffixAttempt = 0;
+
+  while (true) {
+    let fileName = `${baseStem}.md`;
+    if (suffixAttempt >= 1) {
+      fileName = `${baseStem}_${timestamp}.md`;
+    }
+    if (suffixAttempt >= 2) {
+      fileName = `${baseStem}_${timestamp}-${suffixAttempt - 1}.md`;
+    }
+
+    const outputPath = path.join(notesDir, fileName);
+    try {
+      fs.writeFileSync(outputPath, output, { encoding: "utf8", flag: "wx" });
+      return outputPath;
+    } catch (error) {
+      if (error && error.code === "EEXIST") {
+        suffixAttempt += 1;
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 async function collectAnswers(rl) {
@@ -90,11 +128,19 @@ async function collectAnswers(rl) {
   return answers;
 }
 
-function buildOutput(now, answers) {
+function buildOutput(now, answers, projectSlug) {
   const [project, instructed, shipped, openItems, nextInstruction] = answers;
   const today = toDateString(now);
 
   return [
+    "---",
+    "handoff_version: 1",
+    `created_at: ${now.toISOString()}`,
+    `date: ${today}`,
+    `project: ${yamlQuote(project)}`,
+    `project_slug: ${projectSlug}`,
+    "---",
+    "",
     "<!-- Paste this whole block into the next AI agent session -->",
     "## Agent Session Handoff",
     "",
@@ -119,6 +165,19 @@ function buildOutput(now, answers) {
   ].join("\n");
 }
 
+function createHandoff(cwd, now, answers) {
+  const datePart = toDateString(now);
+  const projectSlug = toProjectSlug(answers[0]);
+  const notesDir = path.join(cwd, "NOTES");
+
+  fs.mkdirSync(notesDir, { recursive: true });
+
+  const output = buildOutput(now, answers, projectSlug);
+  const baseStem = `${datePart}_${projectSlug}-handoff`;
+  const outputPath = writeUniqueOutputFile(notesDir, baseStem, output, toTimeString(now));
+  return outputPath;
+}
+
 async function main() {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -132,24 +191,7 @@ async function main() {
     const answers = await collectAnswers(rl);
 
     const now = new Date();
-    const datePart = toDateString(now);
-    const projectSlug = toProjectSlug(answers[0]);
-    const notesDir = path.join(process.cwd(), "NOTES");
-
-    fs.mkdirSync(notesDir, { recursive: true });
-
-    const baseName = `${datePart}_${projectSlug}-handoff.md`;
-    let fileName = baseName;
-    let outputPath = path.join(notesDir, fileName);
-
-    if (fs.existsSync(outputPath)) {
-      const stampedName = `${datePart}_${projectSlug}-handoff_${toTimeString(now)}.md`;
-      fileName = stampedName;
-      outputPath = path.join(notesDir, fileName);
-    }
-
-    const output = buildOutput(now, answers);
-    fs.writeFileSync(outputPath, output, "utf8");
+    const outputPath = createHandoff(process.cwd(), now, answers);
 
     console.log("Handoff saved:");
     console.log(path.relative(process.cwd(), outputPath));
@@ -161,4 +203,15 @@ async function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  buildOutput,
+  createHandoff,
+  parseAnswersFromText,
+  readAnswersFromPipedInput,
+  toProjectSlug,
+  writeUniqueOutputFile,
+};
