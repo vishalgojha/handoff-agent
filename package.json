@@ -1,6 +1,6 @@
 {
   "name": "handoff-agent",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "CLI that captures AI-agent session handoffs as ready-to-paste context markdown.",
   "author": "Vishal <vishal@chaoscraftlabs.com>",
   "homepage": "https://github.com/vishalgojha/handoff-agent#readme",
