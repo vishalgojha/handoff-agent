@@ -1,0 +1,4 @@
+interface:
+  display_name: "Blindspot Supervisor"
+  short_description: "Fill high-impact blind spots and explain background decisions in the same Codex conversation."
+  default_prompt: "blindspot mode: run a proactive second-pass audit on this task, fill high-impact technical/process/product gaps with trace-backed evidence, teach what is happening under the hood concisely, and respond in the required 4-part format."

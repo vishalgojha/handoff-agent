@@ -39,6 +39,33 @@ When prompted, enter `"""` on its own line to start multiline mode, type your an
 2. Answer the prompts
 3. Open the generated file under `./NOTES/` and paste it into your next session
 
+## Codex skill included
+
+This repo now includes a Codex skill at `skills/blindspot-supervisor`.
+
+It provides proactive second-pass supervision in the same conversation:
+
+- fills high-impact technical/process/product blind spots
+- adds missing constraints and risk checks
+- explains background decisions in a concise 4-part format
+
+## Tandem workflow (recommended)
+
+1. Start your build session in Codex with:
+   - `blindspot mode: <task>`
+2. Build with supervision during the session.
+3. At the end, run:
+   - `npx handoff-agent`
+4. Paste the generated handoff into the next session and continue again with `blindspot mode`.
+
+## Install the skill from this repo
+
+If you are using Codex skill installation from GitHub paths, install from:
+
+- `skills/blindspot-supervisor`
+
+Then restart Codex so the skill is picked up.
+
 ## Publish to npm
 
 1. `npm login`
