@@ -5,6 +5,8 @@ const path = require("path");
 const readline = require("readline");
 const crypto = require("crypto");
 
+const MULTILINE_MARKER = '"""';
+
 const questions = [
   "1. What project/agent is this for?",
   "2. What did you instruct the agent to do today?",
@@ -43,11 +45,68 @@ function yamlQuote(value) {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
+function validateAnswers(answers, expectedCount) {
+  if (!Array.isArray(answers)) {
+    throw new TypeError("Answers must be provided as an array.");
+  }
+
+  if (answers.length !== expectedCount) {
+    throw new Error(`Expected ${expectedCount} answers, received ${answers.length}.`);
+  }
+
+  return answers.map((answer, index) => {
+    if (typeof answer !== "string") {
+      throw new TypeError(`Answer ${index + 1} must be a string.`);
+    }
+
+    const value = answer.trim();
+    if (!value) {
+      throw new Error(`Answer ${index + 1} cannot be blank.`);
+    }
+
+    return value;
+  });
+}
+
+function readMultilineAnswer(rl) {
+  return new Promise((resolve) => {
+    const lines = [];
+
+    const readNextLine = () => {
+      rl.question("> ", (line) => {
+        if (line.trim() === MULTILINE_MARKER) {
+          resolve(lines.join("\n").trim());
+          return;
+        }
+
+        lines.push(line);
+        readNextLine();
+      });
+    };
+
+    readNextLine();
+  });
+}
+
 function askQuestion(rl, promptText) {
   return new Promise((resolve) => {
     const ask = () => {
       rl.question(`${promptText}\n> `, (answer) => {
         const value = answer.trim();
+        if (value === MULTILINE_MARKER) {
+          console.log(`Multiline mode: type your response, then end with ${MULTILINE_MARKER}.\n`);
+          readMultilineAnswer(rl).then((multilineValue) => {
+            if (!multilineValue) {
+              console.log("Answer cannot be blank. Please try again.\n");
+              ask();
+              return;
+            }
+
+            resolve(multilineValue);
+          });
+          return;
+        }
+
         if (!value) {
           console.log("Answer cannot be blank. Please try again.\n");
           ask();
@@ -67,16 +126,60 @@ function parseAnswersFromText(raw, expectedCount) {
     lines.pop();
   }
 
-  if (lines.length < expectedCount) {
-    throw new Error(
-      `Expected ${expectedCount} answers from stdin, received ${lines.length}.`
-    );
+  const answers = [];
+  let lineIndex = 0;
+
+  while (answers.length < expectedCount) {
+    if (lineIndex >= lines.length) {
+      throw new Error(
+        `Expected ${expectedCount} answers from stdin, received ${answers.length}.`
+      );
+    }
+
+    const currentLine = lines[lineIndex];
+    const trimmedLine = currentLine.trim();
+
+    if (trimmedLine === MULTILINE_MARKER) {
+      lineIndex += 1;
+      const blockLines = [];
+      let closed = false;
+
+      while (lineIndex < lines.length) {
+        const blockLine = lines[lineIndex];
+        if (blockLine.trim() === MULTILINE_MARKER) {
+          closed = true;
+          lineIndex += 1;
+          break;
+        }
+
+        blockLines.push(blockLine);
+        lineIndex += 1;
+      }
+
+      if (!closed) {
+        throw new Error(`Unterminated multiline answer for answer ${answers.length + 1}.`);
+      }
+
+      const blockValue = blockLines.join("\n").trim();
+      if (!blockValue) {
+        throw new Error(`Answer ${answers.length + 1} cannot be blank.`);
+      }
+
+      answers.push(blockValue);
+      continue;
+    }
+
+    if (!trimmedLine) {
+      throw new Error(`Answer ${answers.length + 1} cannot be blank.`);
+    }
+
+    answers.push(trimmedLine);
+    lineIndex += 1;
   }
 
-  const answers = lines.slice(0, expectedCount).map((line) => line.trim());
-  const blankIndex = answers.findIndex((answer) => !answer);
-  if (blankIndex !== -1) {
-    throw new Error(`Answer ${blankIndex + 1} cannot be blank.`);
+  const hasExtraInput = lines.slice(lineIndex).some((line) => line.trim() !== "");
+  if (hasExtraInput) {
+    throw new Error(`Expected exactly ${expectedCount} answers from stdin, but received extra input.`);
   }
 
   return answers;
@@ -129,8 +232,13 @@ async function collectAnswers(rl) {
 }
 
 function buildOutput(now, answers, projectSlug) {
-  const [project, instructed, shipped, openItems, nextInstruction] = answers;
+  const [project, instructed, shipped, openItems, nextInstruction] = validateAnswers(
+    answers,
+    questions.length
+  );
   const today = toDateString(now);
+  const safeProjectSlug =
+    typeof projectSlug === "string" && projectSlug.trim() ? projectSlug.trim() : toProjectSlug(project);
 
   return [
     "---",
@@ -138,7 +246,7 @@ function buildOutput(now, answers, projectSlug) {
     `created_at: ${now.toISOString()}`,
     `date: ${today}`,
     `project: ${yamlQuote(project)}`,
-    `project_slug: ${projectSlug}`,
+    `project_slug: ${safeProjectSlug}`,
     "---",
     "",
     "<!-- Paste this whole block into the next AI agent session -->",
@@ -166,13 +274,22 @@ function buildOutput(now, answers, projectSlug) {
 }
 
 function createHandoff(cwd, now, answers) {
+  if (typeof cwd !== "string" || !cwd.trim()) {
+    throw new TypeError("A valid current working directory is required.");
+  }
+
+  if (!(now instanceof Date) || Number.isNaN(now.getTime())) {
+    throw new TypeError("A valid Date instance is required.");
+  }
+
+  const validatedAnswers = validateAnswers(answers, questions.length);
   const datePart = toDateString(now);
-  const projectSlug = toProjectSlug(answers[0]);
+  const projectSlug = toProjectSlug(validatedAnswers[0]);
   const notesDir = path.join(cwd, "NOTES");
 
   fs.mkdirSync(notesDir, { recursive: true });
 
-  const output = buildOutput(now, answers, projectSlug);
+  const output = buildOutput(now, validatedAnswers, projectSlug);
   const baseStem = `${datePart}_${projectSlug}-handoff`;
   const outputPath = writeUniqueOutputFile(notesDir, baseStem, output, toTimeString(now));
   return outputPath;
@@ -213,5 +330,6 @@ module.exports = {
   parseAnswersFromText,
   readAnswersFromPipedInput,
   toProjectSlug,
+  validateAnswers,
   writeUniqueOutputFile,
 };

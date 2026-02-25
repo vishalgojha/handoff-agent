@@ -1,16 +1,20 @@
 "use strict";
 
 const assert = require("assert");
+const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const {
+  buildOutput,
   createHandoff,
   parseAnswersFromText,
   toProjectSlug,
+  validateAnswers,
 } = require("../index.js");
 
 function runSmokeTest() {
+  const cliPath = path.resolve(__dirname, "..", "index.js");
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "handoff-agent-"));
   const notesDir = path.join(tmpDir, "NOTES");
 
@@ -62,11 +66,71 @@ function runSmokeTest() {
       "Valid piped answers should be parsed in order."
     );
 
+    assert.deepStrictEqual(
+      parseAnswersFromText('Project\n"""\nLine one\nLine two\n"""\nShipped\nOpen\nNext\n', 5),
+      ["Project", "Line one\nLine two", "Shipped", "Open", "Next"],
+      "Multiline marker should parse a multi-line answer."
+    );
+
+    assert.throws(
+      () => parseAnswersFromText("A\nB\nC\nD\nE\nEXTRA\n", 5),
+      /received extra input/,
+      "Piped mode should reject extra non-empty lines after expected answers."
+    );
+
+    assert.deepStrictEqual(
+      validateAnswers([" A ", "B", "C", "D", "E"], 5),
+      ["A", "B", "C", "D", "E"],
+      "Answer validation should trim and normalize answers."
+    );
+
+    assert.throws(
+      () => validateAnswers(["A", "B", "C"], 5),
+      /Expected 5 answers, received 3/,
+      "Validation should reject incorrect answer counts."
+    );
+
+    assert.throws(
+      () => buildOutput(now, ["A", "", "C", "D", "E"], "a"),
+      /Answer 2 cannot be blank/,
+      "Exported output helper should reject blank answers."
+    );
+
     assert.strictEqual(
       toProjectSlug("Проект Агент"),
       "проект-агент",
       "Unicode project names should produce stable slugs."
     );
+
+    const cliTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "handoff-agent-cli-"));
+    try {
+      const cliResult = spawnSync(process.execPath, [cliPath], {
+        cwd: cliTmpDir,
+        input: "Project CLI\nDid this\nShipped that\nOpen item\nDo next\n",
+        encoding: "utf8",
+      });
+
+      if (cliResult.error && cliResult.error.code === "EPERM") {
+        console.log("CLI integration test skipped: spawn is blocked in this environment.");
+      } else {
+        assert.ifError(cliResult.error);
+        assert.strictEqual(cliResult.status, 0, "CLI invocation should exit successfully.");
+        assert.ok(
+          (cliResult.stdout || "").includes("Handoff saved:"),
+          "CLI invocation should print save confirmation."
+        );
+
+        const cliNotesDir = path.join(cliTmpDir, "NOTES");
+        assert.ok(fs.existsSync(cliNotesDir), "CLI invocation should create NOTES directory.");
+        assert.strictEqual(
+          fs.readdirSync(cliNotesDir).length,
+          1,
+          "CLI invocation should create one handoff file."
+        );
+      }
+    } finally {
+      fs.rmSync(cliTmpDir, { recursive: true, force: true });
+    }
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
