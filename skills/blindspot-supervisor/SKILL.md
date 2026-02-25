@@ -1,6 +1,6 @@
 ---
 name: blindspot-supervisor
-description: Provide proactive same-conversation blind-spot supervision for Codex tasks. Use when the user requests "blindspot mode", asks for second-pass oversight, or needs gaps filled across technical, process, and product concerns. Enforce high-impact-only interventions, source/trace-backed corrections, and concise background teaching in a fixed four-part output. Do not execute autonomous external side effects.
+description: Provide proactive same-conversation blind-spot supervision for Codex tasks. Use when the user requests "blindspot mode", asks for second-pass oversight, requests chain mode with handoff-agent, or needs gaps filled across technical, process, and product concerns. Enforce high-impact-only interventions, source/trace-backed corrections, and concise background teaching in a fixed four-part output. Do not execute autonomous external side effects.
 ---
 
 # Blindspot Supervisor
@@ -20,6 +20,17 @@ Proactively fill high-impact blind spots for both the user and Codex while keepi
    - `Why It Matters`
    - `Background (What Happened Under the Hood)`
    - `Suggested Fix`
+
+## Chain Mode (with handoff-agent)
+
+Use this when the user asks to chain skills/workflows.
+
+1. Keep normal blindspot supervision active during execution.
+2. Before completion, add a short "Session close" block that preserves continuity:
+   - remind to run `npx handoff-agent`
+   - state what context should be captured (goal, shipped, open risks, next best instruction)
+3. If command execution is available and the user requests automation, run `npx handoff-agent` at the end of the session.
+4. Keep chaining guidance minimal and operational, not theoretical.
 
 ## Enforce Boundaries
 

@@ -58,6 +58,12 @@ It provides proactive second-pass supervision in the same conversation:
    - `npx handoff-agent`
 4. Paste the generated handoff into the next session and continue again with `blindspot mode`.
 
+## One-command chaining prompt
+
+Use this prompt when you want both behaviors chained in one run:
+
+`blindspot mode chain: use the appropriate execution skill for the task, run blindspot-supervisor as second-pass quality control, then end with session-close instructions for npx handoff-agent.`
+
 ## Install the skill from this repo
 
 If you are using Codex skill installation from GitHub paths, install from:
